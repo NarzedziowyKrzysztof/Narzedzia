@@ -1,0 +1,212 @@
+'Attribute VB_Name = "XOR_Module"
+Option Explicit
+
+'
+'  JAK UZYWAC:
+'  1. Uruchom makro UtworzArkusz - stworzy arkusz XOR_Tool z polami
+'  2. Uzupelnij komorki B2 (plik wej), B3 (plik wyj), B4 (klucz)
+'  3. Uruchom KodujPlik lub DekodujPlik
+'     Developer -> Macros -> wybierz -> Run
+' ============================================================
+
+Private Sub AktualizujStatus(tekst As String)
+    On Error Resume Next
+    With ThisWorkbook.Sheets("XOR_Tool")
+        .Range("B6").Value = tekst
+    End With
+    DoEvents
+End Sub
+
+Private Function XorHex(linia As String, klucz As String) As String
+    Dim i As Long, ki As Long
+    Dim wynik As String
+    Dim b As Integer, k As Integer
+    wynik = ""
+    ki = 0
+    For i = 1 To Len(linia)
+        b = Asc(Mid(linia, i, 1))
+        k = Asc(Mid(klucz, (ki Mod Len(klucz)) + 1, 1))
+        wynik = wynik & Right("00" & Hex(b Xor k), 2)
+        ki = ki + 1
+    Next i
+    XorHex = wynik
+End Function
+
+Private Function HexXor(hex_linia As String, klucz As String) As String
+    Dim i As Long, ki As Long
+    Dim wynik As String
+    Dim b As Integer, k As Integer
+    Dim para As String
+    wynik = ""
+    ki = 0
+    Dim ile As Long
+    ile = Len(hex_linia) \ 2
+    For i = 0 To ile - 1
+        para = Mid(hex_linia, i * 2 + 1, 2)
+        b = CLng("&H" & para)
+        k = Asc(Mid(klucz, (ki Mod Len(klucz)) + 1, 1))
+        wynik = wynik & Chr(b Xor k)
+        ki = ki + 1
+    Next i
+    HexXor = wynik
+End Function
+
+Private Function FileExists(sciezka As String) As Boolean
+    FileExists = (Dir(sciezka) <> "")
+End Function
+
+Private Function PobierzParametry(plikWej As String, plikWyj As String, klucz As String) As Boolean
+    Dim ws As Worksheet
+    On Error GoTo BrakArkusza
+    Set ws = ThisWorkbook.Sheets("XOR_Tool")
+    plikWej = Trim(ws.Range("B2").Value)
+    plikWyj = Trim(ws.Range("B3").Value)
+    klucz   = Trim(ws.Range("B4").Value)
+    If plikWej = "" Then
+        MsgBox "Komorka B2 (plik wejsciowy) jest pusta.", vbExclamation, "Brak danych"
+        PobierzParametry = False : Exit Function
+    End If
+    If plikWyj = "" Then
+        MsgBox "Komorka B3 (plik wyjsciowy) jest pusta.", vbExclamation, "Brak danych"
+        PobierzParametry = False : Exit Function
+    End If
+    If Len(klucz) = 0 Then
+        MsgBox "Komorka B4 (klucz XOR) jest pusta.", vbExclamation, "Brak danych"
+        PobierzParametry = False : Exit Function
+    End If
+    If Len(klucz) < 4 Then
+        If MsgBox("Klucz ma tylko " & Len(klucz) & " znaki. Kontynuowac?", _
+                  vbQuestion + vbYesNo, "Krotki klucz") = vbNo Then
+            PobierzParametry = False : Exit Function
+        End If
+    End If
+    PobierzParametry = True
+    Exit Function
+BrakArkusza:
+    MsgBox "Nie znaleziono arkusza 'XOR_Tool'." & vbCrLf & _
+           "Uruchom najpierw makro UtworzArkusz.", vbCritical, "Brak arkusza"
+    PobierzParametry = False
+End Function
+
+' ============================================================
+'  KODOWANIE
+' ============================================================
+Sub KodujPlik()
+    Dim plikWej As String, plikWyj As String, klucz As String
+    If Not PobierzParametry(plikWej, plikWyj, klucz) Then Exit Sub
+    If Not FileExists(plikWej) Then
+        MsgBox "Nie znaleziono pliku:" & vbCrLf & plikWej, vbCritical, "Blad"
+        Exit Sub
+    End If
+    If FileExists(plikWyj) Then
+        If MsgBox("Plik wyjsciowy istnieje. Nadpisac?" & vbCrLf & plikWyj, _
+                  vbQuestion + vbYesNo, "Potwierdzenie") = vbNo Then Exit Sub
+    End If
+    AktualizujStatus "Kodowanie w toku..."
+    Dim ff As Integer, fw As Integer
+    ff = FreeFile : Open plikWej For Input As #ff
+    fw = FreeFile : Open plikWyj For Output As #fw
+    Dim linia As String, licznik As Long
+    licznik = 0
+    Do While Not EOF(ff)
+        Line Input #ff, linia
+        Print #fw, XorHex(linia, klucz)
+        licznik = licznik + 1
+        If licznik Mod 100 = 0 Then AktualizujStatus "Kodowanie... " & licznik & " linii"
+    Loop
+    Close #ff : Close #fw
+    AktualizujStatus "OK - Zakodowano " & licznik & " linii  |  " & plikWyj
+    MsgBox "Gotowe!  Zakodowano linii: " & licznik & vbCrLf & "Wynik: " & plikWyj, _
+           vbInformation, "Kodowanie zakonczone"
+End Sub
+
+' ============================================================
+'  DEKODOWANIE
+' ============================================================
+Sub DekodujPlik()
+    Dim plikWej As String, plikWyj As String, klucz As String
+    If Not PobierzParametry(plikWej, plikWyj, klucz) Then Exit Sub
+    If Not FileExists(plikWej) Then
+        MsgBox "Nie znaleziono pliku:" & vbCrLf & plikWej, vbCritical, "Blad"
+        Exit Sub
+    End If
+    If FileExists(plikWyj) Then
+        If MsgBox("Plik wyjsciowy istnieje. Nadpisac?" & vbCrLf & plikWyj, _
+                  vbQuestion + vbYesNo, "Potwierdzenie") = vbNo Then Exit Sub
+    End If
+    AktualizujStatus "Dekodowanie w toku..."
+    Dim ff As Integer, fw As Integer
+    ff = FreeFile : Open plikWej For Input As #ff
+    fw = FreeFile : Open plikWyj For Output As #fw
+    Dim linia As String, licznik As Long, blad As Long
+    licznik = 0 : blad = 0
+    Do While Not EOF(ff)
+        Line Input #ff, linia
+        linia = Trim(linia)
+        If Len(linia) = 0 Then
+            Print #fw, ""
+        ElseIf Len(linia) Mod 2 <> 0 Then
+            Print #fw, "[BLAD LINII " & licznik + 1 & " - nieprawidlowy hex]"
+            blad = blad + 1
+        Else
+            Print #fw, HexXor(linia, klucz)
+        End If
+        licznik = licznik + 1
+        If licznik Mod 100 = 0 Then AktualizujStatus "Dekodowanie... " & licznik & " linii"
+    Loop
+    Close #ff : Close #fw
+    If blad > 0 Then
+        AktualizujStatus "UWAGA: " & blad & " blednych linii - sprawdz klucz!"
+        MsgBox "Uwaga: " & blad & " linii nieprawidlowych." & vbCrLf & _
+               "Czy uzywasz tego samego klucza co przy kodowaniu?", vbExclamation, "Ostrzezenie"
+    Else
+        AktualizujStatus "OK - Zdekodowano " & licznik & " linii  |  " & plikWyj
+        MsgBox "Gotowe!  Zdekodowano linii: " & licznik & vbCrLf & "Wynik: " & plikWyj, _
+               vbInformation, "Dekodowanie zakonczone"
+    End If
+End Sub
+
+' ============================================================
+'  POMOCNICZE: tworzy arkusz XOR_Tool z polami
+'  Uruchom to makro jako pierwsze!
+' ============================================================
+Sub UtworzArkusz()
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("XOR_Tool")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add
+        ws.Name = "XOR_Tool"
+    End If
+    ws.Activate
+    ' Naglowki i etykiety
+    ws.Range("A1").Value = "Parametr"
+    ws.Range("B1").Value = "Wartosc"
+    ws.Range("A2").Value = "Plik wejsciowy:"
+    ws.Range("A3").Value = "Plik wyjsciowy:"
+    ws.Range("A4").Value = "Klucz XOR:"
+    ws.Range("A5").Value = "Status:"
+    ' Przykladowe wartosci
+    ws.Range("B2").Value = "C:\Users\" & Environ("USERNAME") & "\plik.sh"
+    ws.Range("B3").Value = "C:\Users\" & Environ("USERNAME") & "\plik_zakodowany.txt"
+    ws.Range("B4").Value = "MojKluczXOR"
+    ws.Range("B6").Value = "Gotowy."
+    ' Formatowanie
+    ws.Range("A1:B1").Font.Bold = True
+    ws.Range("A1:B1").Interior.Color = RGB(31, 56, 100)
+    ws.Range("A1:B1").Font.Color = RGB(255, 255, 255)
+    ws.Columns("A").ColumnWidth = 22
+    ws.Columns("B").ColumnWidth = 55
+    ws.Range("A2:A5").Font.Bold = True
+    ws.Range("B2:B4").Interior.Color = RGB(242, 242, 242)
+    ws.Range("B6").Interior.Color = RGB(237, 237, 237)
+    ws.Range("B6").Font.Italic = True
+    MsgBox "Arkusz 'XOR_Tool' gotowy!" & vbCrLf & vbCrLf & _
+           "Uzupelnij komorki:" & vbCrLf & _
+           "  B2 = sciezka pliku do zakodowania" & vbCrLf & _
+           "  B3 = sciezka pliku wyjsciowego (.txt)" & vbCrLf & _
+           "  B4 = Twoj klucz XOR" & vbCrLf & vbCrLf & _
+           "Potem uruchom KodujPlik lub DekodujPlik.", _
+           vbInformation, "XOR Tool - gotowy"
+End Sub
