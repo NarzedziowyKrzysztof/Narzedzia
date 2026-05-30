@@ -1,7 +1,6 @@
 #!/bin/bash
 # ════════════════════════════════════════════════════════════
 # Skrypt do hurtowej modyfikacji plików .conf
-# Autor: Krzysztof Boroń
 # Operacje:
 #   1. Usuwa 7 ostatnich linijek (końcowy komentarz)
 #   2. Waliduje znaczniki przed usunięciem (zabezpieczenie)
